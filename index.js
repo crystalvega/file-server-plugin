@@ -249,16 +249,32 @@ function registerActions(api) {
   } catch (err) {
     console.error('[file-server-drop] Failed to set composer-attach-menu:', err);
   }
+
+  try {
+    api.ui.setActions('composer-header-actions', [
+      {
+        id: 'upload-fileserver-header',
+        label: isRu ? 'Файловый сервер (Mail Drop)' : 'File Server (Mail Drop)',
+        description: isRu ? 'Выгрузка файлов на защищенный корпоративный сервер' : 'Upload files to corporate secure server',
+        icon: 'cloud-upload',
+        order: 1,
+      }
+    ]);
+  } catch (err) {
+    console.error('[file-server-drop] Failed to set composer-header-actions:', err);
+  }
 }
 
 // React modal component for uploading files
 function UploadDialog(props) {
-  const React = (typeof window !== 'undefined' && window.React) ? window.React : null;
-  if (!React) {
+  const _React = (typeof React !== 'undefined' && React) ||
+                 (typeof require === 'function' && require('react')) ||
+                 (typeof window !== 'undefined' && window.React);
+  if (!_React) {
     return null;
   }
 
-  const { useState, useRef, createElement: h } = React;
+  const { useState, useRef, createElement: h } = _React;
   const isRu = getLocale() === 'ru';
 
   const [files, setFiles] = useState([]);
@@ -273,6 +289,14 @@ function UploadDialog(props) {
   const fileInputRef = useRef(null);
   const serverUrl = (props.serverUrl || '/file-server').replace(/\/+$/, '');
   const apiKey = props.apiKey || '';
+
+  const closeWithResult = (res) => {
+    if (typeof props.onResult === 'function') {
+      props.onResult(res);
+    } else if (typeof props.onClose === 'function') {
+      props.onClose(res);
+    }
+  };
 
   const handleFileChange = (e) => {
     if (e.target && e.target.files) {
@@ -336,12 +360,10 @@ function UploadDialog(props) {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const resp = JSON.parse(xhr.responseText);
-          if (props.onClose) {
-            props.onClose({
-              uploadData: resp,
-              files: files.map(f => ({ name: f.name, size: f.size })),
-            });
-          }
+          closeWithResult({
+            uploadData: resp,
+            files: files.map(f => ({ name: f.name, size: f.size })),
+          });
         } catch (e) {
           setError((isRu ? 'Ошибка разбора ответа сервера: ' : 'Failed to parse server response: ') + e.message);
           setUploading(false);
@@ -368,9 +390,7 @@ function UploadDialog(props) {
   };
 
   const handleCancel = () => {
-    if (props.onClose) {
-      props.onClose(null);
-    }
+    closeWithResult(null);
   };
 
   const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
@@ -722,7 +742,7 @@ module.exports = {
     },
 
     async onAction({ surface, actionId, context }) {
-      if (actionId === 'upload-fileserver' || actionId === 'upload-fileserver-menu') {
+      if (actionId === 'upload-fileserver' || actionId === 'upload-fileserver-menu' || actionId === 'upload-fileserver-header') {
         const composerId = context?.composerId;
         const isRu = getLocale() === 'ru';
         try {

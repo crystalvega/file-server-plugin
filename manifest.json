@@ -1,7 +1,7 @@
 {
   "id": "file-server-drop",
   "name": "File Server (Mail Drop)",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "SZMA Inform",
   "description": "Secure temporary file attachments for Bulwark Webmail with 28-day retention and PIN-code protection",
   "type": "hook",
