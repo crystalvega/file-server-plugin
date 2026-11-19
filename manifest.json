@@ -53,5 +53,6 @@
       "default": true
     }
   },
-  "icon": "icon.svg"
+  "icon": "icon.svg",
+  "iconUrl": "/webmail/branding/file-server-drop.svg"
 }
