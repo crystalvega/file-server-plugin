@@ -1,0 +1,21 @@
+name: Package Plugin
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zip
+        run: |
+          zip -r file-server-drop.zip manifest.json index.js README.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: file-server-drop
+          path: file-server-drop.zip
