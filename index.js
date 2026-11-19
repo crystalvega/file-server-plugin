@@ -3,9 +3,20 @@
 
 let pluginApi = null;
 
+function getLocale() {
+  if (typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) {
+    if (document.documentElement.lang.startsWith('ru')) return 'ru';
+  }
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    if (navigator.language.startsWith('ru')) return 'ru';
+  }
+  return 'en';
+}
+
 function formatSize(bytes) {
   if (!bytes || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
+  const isRu = getLocale() === 'ru';
+  const units = isRu ? ['Б', 'КБ', 'МБ', 'ГБ'] : ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return (bytes / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
 }
@@ -46,9 +57,10 @@ async function getPluginConfig() {
 }
 
 function buildEmailSnippet(uploadData, filesList) {
-  const expiresDate = new Date(uploadData.expires_at).toLocaleDateString('en-US', {
+  const isRu = getLocale() === 'ru';
+  const expiresDate = new Date(uploadData.expires_at).toLocaleDateString(isRu ? 'ru-RU' : 'en-US', {
     year: 'numeric',
-    month: 'short',
+    month: isRu ? 'numeric' : 'short',
     day: 'numeric',
   });
   const files = (filesList && filesList.length > 0)
@@ -71,13 +83,28 @@ function buildEmailSnippet(uploadData, filesList) {
     fileRowsText = files.map(f => `  • ${f.name} (${formatSize(f.size)})`).join('\n') + '\n';
   }
 
-  const headerHtml = isMultiple
-    ? `📦 Attached Files (${files.length} items, total ${totalFormatted})`
-    : `📎 Large Attached File: ${escapeHtml(files[0]?.name || 'File')} <span style="font-weight: normal; color: #64748b;">(${formatSize(files[0]?.size || totalBytes)})</span>`;
+  const headerHtml = isRu
+    ? (isMultiple
+        ? `📦 Вложенные файлы (${files.length} шт., всего ${totalFormatted})`
+        : `📎 Вложенный большой файл: ${escapeHtml(files[0]?.name || 'Файл')} <span style="font-weight: normal; color: #64748b;">(${formatSize(files[0]?.size || totalBytes)})</span>`)
+    : (isMultiple
+        ? `📦 Attached Files (${files.length} items, total ${totalFormatted})`
+        : `📎 Large Attached File: ${escapeHtml(files[0]?.name || 'File')} <span style="font-weight: normal; color: #64748b;">(${formatSize(files[0]?.size || totalBytes)})</span>`);
 
-  const headerText = isMultiple
-    ? `📦 Attached Files (${files.length} items, total ${totalFormatted}):\n${fileRowsText}`
-    : `📎 Attached File: ${files[0]?.name || 'File'} (${formatSize(files[0]?.size || totalBytes)})\n`;
+  const headerText = isRu
+    ? (isMultiple
+        ? `📦 Вложенные файлы (${files.length} шт., всего ${totalFormatted}):\n${fileRowsText}`
+        : `📎 Вложенный файл: ${files[0]?.name || 'Файл'} (${formatSize(files[0]?.size || totalBytes)})\n`)
+    : (isMultiple
+        ? `📦 Attached Files (${files.length} items, total ${totalFormatted}):\n${fileRowsText}`
+        : `📎 Attached File: ${files[0]?.name || 'File'} (${formatSize(files[0]?.size || totalBytes)})\n`);
+
+  const descHtml = isRu
+    ? `${isMultiple ? 'Файлы временно размещены' : 'Файл временно размещен'} на защищенном корпоративном сервере и доступен для скачивания до <b>${expiresDate}</b>.`
+    : `${isMultiple ? 'Files are temporarily hosted' : 'File is temporarily hosted'} on the secure corporate file server and available for download until <b>${expiresDate}</b>.`;
+
+  const linkLabelHtml = isRu ? '👉 <b>Ссылка для скачивания:</b>' : '👉 <b>Download link:</b>';
+  const pinLabelHtml = isRu ? '🔑 <b>Код доступа (PIN):</b>' : '🔑 <b>Access Code (PIN):</b>';
 
   const html = `
 <div style="margin: 16px 0; padding: 16px 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #0f172a;">
@@ -86,18 +113,20 @@ function buildEmailSnippet(uploadData, filesList) {
   </div>
   ${fileRowsHtml}
   <div style="margin-bottom: 8px; color: #334155;">
-    ${isMultiple ? 'Files are temporarily hosted' : 'File is temporarily hosted'} on the secure corporate file server and available for download until <b>${expiresDate}</b>.
+    ${descHtml}
   </div>
   <div style="margin-bottom: 8px;">
-    👉 <b>Download link:</b> <a href="${uploadData.url}" target="_blank" style="color: #185aea; text-decoration: underline; font-weight: 600;">${uploadData.url}</a>
+    ${linkLabelHtml} <a href="${uploadData.url}" target="_blank" style="color: #185aea; text-decoration: underline; font-weight: 600;">${uploadData.url}</a>
   </div>
   <div>
-    🔑 <b>Access Code (PIN):</b> <span style="font-family: monospace; font-size: 15px; font-weight: 700; background-color: #e2e8f0; padding: 2px 8px; border-radius: 4px; letter-spacing: 2px; color: #0f172a;">${uploadData.pin}</span>
+    ${pinLabelHtml} <span style="font-family: monospace; font-size: 15px; font-weight: 700; background-color: #e2e8f0; padding: 2px 8px; border-radius: 4px; letter-spacing: 2px; color: #0f172a;">${uploadData.pin}</span>
   </div>
 </div>
 `;
 
-  const text = `\n------------------------------------------------------------\n${headerText}Available until: ${expiresDate}\n👉 Download link: ${uploadData.url}\n🔑 Access code (PIN): ${uploadData.pin}\n------------------------------------------------------------\n`;
+  const text = isRu
+    ? `\n------------------------------------------------------------\n${headerText}Файл доступен до: ${expiresDate}\n👉 Ссылка для скачивания: ${uploadData.url}\n🔑 Код доступа (PIN): ${uploadData.pin}\n------------------------------------------------------------\n`
+    : `\n------------------------------------------------------------\n${headerText}Available until: ${expiresDate}\n👉 Download link: ${uploadData.url}\n🔑 Access code (PIN): ${uploadData.pin}\n------------------------------------------------------------\n`;
 
   return { html, text };
 }
@@ -113,112 +142,113 @@ async function handleAttachment(fileId) {
     const config = await getPluginConfig();
     const thresholdBytes = config.thresholdMb * 1024 * 1024;
 
-    if (file.size <= thresholdBytes) {
-      return null; // Attach normally
+    if (file.size < thresholdBytes) {
+      return null;
     }
 
-    const formattedSize = formatSize(file.size);
+    const isRu = getLocale() === 'ru';
 
     if (config.alwaysAsk && pluginApi.ui && typeof pluginApi.ui.confirm === 'function') {
-      const confirmed = await pluginApi.ui.confirm({
-        title: 'Large File Attachment',
-        message: `The file "${file.name}" (${formattedSize}) exceeds the standard email limit of ${config.thresholdMb} MB.\n\nWould you like to upload it to the secure corporate file server instead?\n• Retention period: ${config.defaultTtlDays} days\n• Protection: 6-digit PIN code\n• Download link and PIN will be automatically added to the message.`,
-        confirmLabel: 'Upload to File Server',
-        cancelLabel: 'Attach Normally',
+      const formattedSize = formatSize(file.size);
+      const question = isRu
+        ? `Файл "${file.name}" имеет размер ${formattedSize}, что превышает рекомендованный лимит для почты (${config.thresholdMb} МБ).\n\nЗагрузить его на корпоративный файловый сервер и вставить защищенную ссылку с PIN-кодом?`
+        : `File "${file.name}" is ${formattedSize}, which exceeds the recommended email limit (${config.thresholdMb} MB).\n\nUpload it to corporate file server and insert a secure PIN-protected link?`;
+
+      const shouldUpload = await pluginApi.ui.confirm({
+        title: isRu ? 'Большой файл' : 'Large Attachment',
+        message: question,
+        confirmLabel: isRu ? 'Выгрузить на сервер' : 'Upload to File Server',
+        cancelLabel: isRu ? 'Прикрепить обычно' : 'Attach Normally',
       });
-      if (!confirmed) {
-        return null; // Keep regular attachment
+
+      if (!shouldUpload) {
+        return null;
       }
     }
 
     if (pluginApi.toast && typeof pluginApi.toast.info === 'function') {
-      pluginApi.toast.info(`Uploading "${file.name}" to file server...`);
+      pluginApi.toast.info(isRu ? `Выгрузка файла "${file.name}" на файловый сервер...` : `Uploading "${file.name}" to file server...`);
     }
 
     const formData = new FormData();
-    const blob = await file.slice();
+    const blob = await pluginApi.blobs.read(fileId);
     formData.append('files', blob, file.name);
     formData.append('ttl_days', String(config.defaultTtlDays));
 
-    const uploadUrl = (config.serverUrl || '/file-server') + '/api/upload';
+    const uploadUrl = `${config.serverUrl}/api/upload`;
     const headers = {};
     if (config.apiKey) {
       headers['X-API-Key'] = config.apiKey;
     }
 
-    const res = await fetch(uploadUrl, {
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       headers,
       body: formData,
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      let errMsg = `HTTP ${res.status}`;
-      try {
-        const errJson = JSON.parse(errText);
-        errMsg = errJson.detail || errJson.message || errMsg;
-      } catch (e) {
-        errMsg = errText || errMsg;
-      }
-      throw new Error(errMsg);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Server returned HTTP ${response.status}: ${errText}`);
     }
 
-    const uploadData = await res.json();
-    const { html, text } = buildEmailSnippet(uploadData, [file]);
+    const result = await response.json();
+    const { html, text } = buildEmailSnippet(result, [{ name: file.name, size: file.size }]);
 
     if (pluginApi.composer && typeof pluginApi.composer.insertText === 'function') {
       await pluginApi.composer.insertText({ html, text });
     }
 
     if (pluginApi.toast && typeof pluginApi.toast.success === 'function') {
-      pluginApi.toast.success(`File "${file.name}" successfully uploaded to file server!`);
+      pluginApi.toast.success(isRu ? `Файл "${file.name}" успешно загружен на файловый сервер!` : `File "${file.name}" successfully uploaded to file server!`);
     }
 
     return { cancelUpload: true };
   } catch (err) {
     console.error('[file-server-drop] Intercept upload error:', err);
+    const isRu = getLocale() === 'ru';
     if (pluginApi.toast && typeof pluginApi.toast.error === 'function') {
-      pluginApi.toast.error(`Failed to upload to file server: ${err.message}`);
+      pluginApi.toast.error(isRu ? `Ошибка выгрузки на файловый сервер: ${err.message}` : `Failed to upload to file server: ${err.message}`);
     }
     return null;
   }
 }
 
 function registerActions(api) {
-  const surfaces = [
-    'composer:toolbar',
-    'composer:action-bar',
-    'composer:primary-actions',
-    'composer:secondary-actions',
-    'composer:bottom-actions',
-    'composer:more-menu',
-    'composer:attachment-menu',
-  ];
+  if (!api || !api.ui || typeof api.ui.setActions !== 'function') {
+    console.warn('[file-server-drop] api.ui.setActions is not available');
+    return;
+  }
 
-  surfaces.forEach(surface => {
-    try {
-      api.actions.register({
-        id: 'upload-fileserver',
-        surface,
-        label: 'File Server',
-        description: 'Upload large files to secure corporate file server (Mail Drop)',
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>',
-        order: 10,
-      });
-    } catch (e) {}
-  });
+  const isRu = getLocale() === 'ru';
 
   try {
-    api.actions.register({
-      id: 'upload-fileserver-menu',
-      surface: 'composer:attachment-menu',
-      label: 'Upload to File Server (Mail Drop)',
-      description: 'Temporary file storage protected with PIN code',
-      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="m16 8-4-4-4 4"/><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/></svg>',
-      order: 1,
-    });
-  } catch (e) {}
+    api.ui.setActions('composer-toolbar-actions', [
+      {
+        id: 'upload-fileserver',
+        label: isRu ? 'Файловый сервер' : 'File Server',
+        description: isRu ? 'Выгрузка файлов на защищенный корпоративный сервер (Mail Drop)' : 'Upload large files to secure corporate file server (Mail Drop)',
+        icon: 'cloud-upload',
+        order: 10,
+      }
+    ]);
+  } catch (err) {
+    console.error('[file-server-drop] Failed to set composer-toolbar-actions:', err);
+  }
+
+  try {
+    api.ui.setActions('composer-attach-menu', [
+      {
+        id: 'upload-fileserver-menu',
+        label: isRu ? 'Загрузить на файловый сервер (Mail Drop)' : 'Upload to File Server (Mail Drop)',
+        description: isRu ? 'Временное хранилище файлов с защитой PIN-кодом' : 'Temporary file storage protected with PIN code',
+        icon: 'cloud-upload',
+        order: 1,
+      }
+    ]);
+  } catch (err) {
+    console.error('[file-server-drop] Failed to set composer-attach-menu:', err);
+  }
 }
 
 // React modal component for uploading files
@@ -229,6 +259,7 @@ function UploadDialog(props) {
   }
 
   const { useState, useRef, createElement: h } = React;
+  const isRu = getLocale() === 'ru';
 
   const [files, setFiles] = useState([]);
   const [ttlDays, setTtlDays] = useState(props.defaultTtlDays || 28);
@@ -265,34 +296,39 @@ function UploadDialog(props) {
 
   const handleStartUpload = () => {
     if (files.length === 0) {
-      setError('Please select at least one file.');
+      setError(isRu ? 'Пожалуйста, выберите хотя бы один файл.' : 'Please select at least one file.');
       return;
     }
 
-    setError(null);
     setUploading(true);
     setProgress(0);
-    setProgressText('Preparing upload...');
+    setProgressText(isRu ? 'Подготовка к выгрузке...' : 'Preparing upload...');
+    setError(null);
 
     const formData = new FormData();
-    files.forEach(f => formData.append('files', f, f.name));
+    files.forEach(f => {
+      formData.append('files', f, f.name);
+    });
     formData.append('ttl_days', String(ttlDays));
     if (pin && pin.trim().length === 6) {
       formData.append('pin', pin.trim());
     }
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${serverUrl}/api/upload`);
+    const endpoint = `${serverUrl}/api/upload`;
+    xhr.open('POST', endpoint, true);
 
     if (apiKey) {
       xhr.setRequestHeader('X-API-Key', apiKey);
     }
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable) {
+        const pct = Math.round((evt.loaded / evt.total) * 100);
         setProgress(pct);
-        setProgressText(`Uploaded ${formatSize(e.loaded)} of ${formatSize(e.total)} (${pct}%)`);
+        setProgressText(isRu ? `Отправка: ${pct}% (${formatSize(evt.loaded)} из ${formatSize(evt.total)})` : `Uploading: ${pct}% (${formatSize(evt.loaded)} of ${formatSize(evt.total)})`);
+      } else {
+        setProgressText(isRu ? 'Загрузка файлов на сервер...' : 'Uploading files to server...');
       }
     };
 
@@ -307,7 +343,7 @@ function UploadDialog(props) {
             });
           }
         } catch (e) {
-          setError('Failed to parse server response: ' + e.message);
+          setError((isRu ? 'Ошибка разбора ответа сервера: ' : 'Failed to parse server response: ') + e.message);
           setUploading(false);
         }
       } else {
@@ -318,13 +354,13 @@ function UploadDialog(props) {
         } catch (e) {
           msg = xhr.responseText || msg;
         }
-        setError('Upload error: ' + msg);
+        setError((isRu ? 'Ошибка загрузки: ' : 'Upload error: ') + msg);
         setUploading(false);
       }
     };
 
     xhr.onerror = () => {
-      setError('Network error while transferring files to server.');
+      setError(isRu ? 'Сетевая ошибка при передаче файлов на сервер.' : 'Network error while transferring files to server.');
       setUploading(false);
     };
 
@@ -338,6 +374,7 @@ function UploadDialog(props) {
   };
 
   const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
+  const totalFormatted = formatSize(totalBytes);
 
   return h('div', {
     style: {
@@ -357,7 +394,9 @@ function UploadDialog(props) {
         color: 'var(--color-muted-foreground, #a1a1aa)',
         lineHeight: '1.4',
       }
-    }, 'Files will be uploaded to the corporate secure server with temporary retention and PIN access. The link and code will be inserted into the email.'),
+    }, isRu
+      ? 'Файлы будут загружены на корпоративный защищенный сервер с ограничением по времени и доступом по PIN-коду. Ссылка и код будут вставлены в письмо.'
+      : 'Files will be uploaded to the corporate secure server with temporary retention and PIN access. The link and code will be inserted into the email.'),
 
     // Dropzone
     !uploading ? h('div', {
@@ -416,11 +455,11 @@ function UploadDialog(props) {
       h('div', {
         key: 'drop-title',
         style: { fontWeight: 600, fontSize: '14px', marginBottom: '4px', color: 'var(--color-foreground, inherit)' }
-      }, 'Click to select files or drag & drop here'),
+      }, isRu ? 'Нажмите для выбора файлов или перетащите их сюда' : 'Click to select files or drag & drop here'),
       h('div', {
         key: 'drop-sub',
         style: { fontSize: '12px', color: 'var(--color-muted-foreground, #a1a1aa)' }
-      }, 'Any file types (up to 10 GB per bundle)'),
+      }, isRu ? 'Любые типы файлов (до 10 ГБ на пакет)' : 'Any file types (up to 10 GB per bundle)'),
     ]) : null,
 
     // File list preview
@@ -447,7 +486,7 @@ function UploadDialog(props) {
           justifyContent: 'space-between',
         }
       }, [
-        h('span', { key: 't1' }, `Selected files: ${files.length} (${formatSize(totalBytes)})`),
+        h('span', { key: 't1' }, isRu ? `Выбранные файлы: ${files.length} (${totalFormatted})` : `Selected files: ${files.length} (${totalFormatted})`),
       ]),
       ...files.map((f, i) => h('div', {
         key: 'file-' + i,
@@ -483,7 +522,7 @@ function UploadDialog(props) {
           key: 'del',
           type: 'button',
           onClick: () => removeFile(i),
-          title: 'Remove from list',
+          title: isRu ? 'Удалить из списка' : 'Remove from list',
           style: {
             background: 'transparent',
             border: 'none',
@@ -514,7 +553,7 @@ function UploadDialog(props) {
           key: 'ttl-lbl',
           style: { display: 'block', marginBottom: '6px', color: 'var(--color-foreground, inherit)' }
         }, [
-          h('span', { key: 'ttl-t', style: { fontWeight: 500 } }, 'Retention period:'),
+          h('span', { key: 'ttl-t', style: { fontWeight: 500 } }, isRu ? 'Срок хранения:' : 'Retention period:'),
         ]),
         h('select', {
           key: 'ttl-sel',
@@ -531,11 +570,11 @@ function UploadDialog(props) {
             outline: 'none',
           }
         }, [
-          h('option', { key: '28', value: 28 }, '28 days (default)'),
-          h('option', { key: '14', value: 14 }, '14 days'),
-          h('option', { key: '7', value: 7 }, '7 days'),
-          h('option', { key: '3', value: 3 }, '3 days'),
-          h('option', { key: '1', value: 1 }, '1 day'),
+          h('option', { key: '28', value: 28 }, isRu ? '28 дней (по умолчанию)' : '28 days (default)'),
+          h('option', { key: '14', value: 14 }, isRu ? '14 дней' : '14 days'),
+          h('option', { key: '7', value: 7 }, isRu ? '7 дней' : '7 days'),
+          h('option', { key: '3', value: 3 }, isRu ? '3 дня' : '3 days'),
+          h('option', { key: '1', value: 1 }, isRu ? '1 день' : '1 day'),
         ])
       ]),
 
@@ -545,14 +584,14 @@ function UploadDialog(props) {
           key: 'pin-lbl',
           style: { display: 'block', marginBottom: '6px', color: 'var(--color-foreground, inherit)' }
         }, [
-          h('span', { key: 'pin-t', style: { fontWeight: 500 } }, 'PIN code (optional):'),
+          h('span', { key: 'pin-t', style: { fontWeight: 500 } }, isRu ? 'PIN-код (опционально):' : 'PIN code (optional):'),
         ]),
         h('input', {
           key: 'pin-inp',
           type: 'text',
           maxLength: 6,
           pattern: '[0-9]{6}',
-          placeholder: 'Auto-generated',
+          placeholder: isRu ? 'Автогенерация' : 'Auto-generated',
           value: pin,
           onChange: (e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 6)),
           style: {
@@ -604,7 +643,7 @@ function UploadDialog(props) {
           color: 'var(--color-muted-foreground, #a1a1aa)',
           textAlign: 'center',
         }
-      }, progressText || 'Uploading files...'),
+      }, progressText || (isRu ? 'Загрузка файлов на сервер...' : 'Uploading files to server...')),
     ]) : null,
 
     // Error Alert
@@ -647,7 +686,7 @@ function UploadDialog(props) {
           fontSize: '13px',
           cursor: uploading ? 'not-allowed' : 'pointer',
         }
-      }, 'Cancel'),
+      }, isRu ? 'Отмена' : 'Cancel'),
 
       !uploading ? h('button', {
         key: 'btn-upload',
@@ -665,7 +704,7 @@ function UploadDialog(props) {
           cursor: files.length === 0 ? 'not-allowed' : 'pointer',
           opacity: files.length === 0 ? 0.6 : 1,
         }
-      }, files.length > 0 ? `Upload ${files.length} file(s)` : 'Select files') : null,
+      }, files.length > 0 ? (isRu ? `Загрузить ${files.length} файл(ов)` : `Upload ${files.length} file(s)`) : (isRu ? 'Выберите файлы' : 'Select files')) : null,
     ]),
   ]);
 }
@@ -685,10 +724,11 @@ module.exports = {
     async onAction({ surface, actionId, context }) {
       if (actionId === 'upload-fileserver' || actionId === 'upload-fileserver-menu') {
         const composerId = context?.composerId;
+        const isRu = getLocale() === 'ru';
         try {
           const config = await getPluginConfig();
           const result = await pluginApi.ui.openDialog({
-            title: 'Upload Files to File Server',
+            title: isRu ? 'Загрузка файлов на файловый сервер' : 'Upload Files to File Server',
             slot: 'plugin-dialog',
             extraProps: {
               composerId,
@@ -703,15 +743,17 @@ module.exports = {
             const { html, text } = buildEmailSnippet(result.uploadData, result.files);
             if (composerId && pluginApi.composer && typeof pluginApi.composer.replaceSelection === 'function') {
               await pluginApi.composer.replaceSelection(composerId, { html, text }, { below: true });
+            } else if (composerId && pluginApi.composer && typeof pluginApi.composer.insertText === 'function') {
+              await pluginApi.composer.insertText({ html, text });
             }
             if (pluginApi.toast && typeof pluginApi.toast.success === 'function') {
-              pluginApi.toast.success('Files successfully uploaded to file server and link added to message!');
+              pluginApi.toast.success(isRu ? 'Файлы успешно загружены и ссылка добавлена в письмо!' : 'Files successfully uploaded and link added to message!');
             }
           }
         } catch (err) {
           console.error('[file-server-drop] openDialog error:', err);
           if (pluginApi.toast && typeof pluginApi.toast.error === 'function') {
-            pluginApi.toast.error('Upload failed: ' + err.message);
+            pluginApi.toast.error(isRu ? ('Ошибка загрузки: ' + err.message) : ('Upload failed: ' + err.message));
           }
         }
       }
