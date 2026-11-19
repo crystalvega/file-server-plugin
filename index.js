@@ -208,15 +208,15 @@ async function handleAttachment(fileId) {
     const result = await response.json();
     const { html, text } = buildEmailSnippet(result, [{ name: file.name, size: file.size }]);
 
-    if (pluginApi.composer && typeof pluginApi.composer.insertText === 'function') {
-      await pluginApi.composer.insertText({ html, text });
-    }
-
     if (pluginApi.toast && typeof pluginApi.toast.success === 'function') {
       pluginApi.toast.success(isRu ? `Файл "${file.name}" успешно загружен на файловый сервер!` : `File "${file.name}" successfully uploaded to file server!`);
     }
 
-    return { cancelUpload: true };
+    return {
+      externalAttachment: true,
+      html,
+      text,
+    };
   } catch (err) {
     console.error('[file-server-drop] Intercept upload error:', err);
     const isRu = getLocale() === 'ru';
@@ -775,9 +775,8 @@ module.exports = {
           if (result && result.uploadData) {
             const { html, text } = buildEmailSnippet(result.uploadData, result.files);
             if (composerId && pluginApi.composer && typeof pluginApi.composer.replaceSelection === 'function') {
-              await pluginApi.composer.replaceSelection(composerId, { html, text }, { below: true });
-            } else if (composerId && pluginApi.composer && typeof pluginApi.composer.insertText === 'function') {
-              await pluginApi.composer.insertText({ html, text });
+              const content = html ? { html } : { text };
+              await pluginApi.composer.replaceSelection(composerId, content, { below: true });
             }
             if (pluginApi.toast && typeof pluginApi.toast.success === 'function') {
               pluginApi.toast.success(isRu ? 'Файлы успешно загружены и ссылка добавлена в письмо!' : 'Files successfully uploaded and link added to message!');
