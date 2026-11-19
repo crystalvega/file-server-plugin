@@ -40,16 +40,26 @@ async function getPluginConfig() {
   let defaultTtlDays = 28;
   let alwaysAsk = true;
 
+  // 1. Read global admin configuration (configSchema)
+  if (pluginApi && pluginApi.config && typeof pluginApi.config.get === 'function') {
+    try {
+      const cfg = await pluginApi.config.get();
+      if (cfg) {
+        if (typeof cfg.serverUrl === 'string' && cfg.serverUrl.trim()) {
+          serverUrl = cfg.serverUrl.trim().replace(/\/+$/, '');
+        }
+        if (typeof cfg.apiKey === 'string' && cfg.apiKey.trim()) {
+          apiKey = cfg.apiKey.trim();
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. Read user preferences (settingsSchema)
   if (pluginApi && pluginApi.settings && typeof pluginApi.settings.get === 'function') {
     try {
       const s = await pluginApi.settings.get();
       if (s) {
-        if (typeof s.serverUrl === 'string' && s.serverUrl.trim()) {
-          serverUrl = s.serverUrl.trim().replace(/\/+$/, '');
-        }
-        if (typeof s.apiKey === 'string' && s.apiKey.trim()) {
-          apiKey = s.apiKey.trim();
-        }
         if (typeof s.sizeThresholdMb === 'number') thresholdMb = s.sizeThresholdMb;
         if (typeof s.defaultTtlDays === 'number') defaultTtlDays = s.defaultTtlDays;
         if (typeof s.alwaysAsk === 'boolean') alwaysAsk = s.alwaysAsk;

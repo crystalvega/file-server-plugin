@@ -1,7 +1,7 @@
 {
   "id": "file-server-drop",
   "name": "File Server (Mail Drop)",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "author": "SZMA Inform",
   "description": "Secure temporary file attachments for Bulwark Webmail with 28-day retention and PIN-code protection",
   "type": "hook",
@@ -17,19 +17,21 @@
     "https://*",
     "http://localhost:*"
   ],
-  "settingsSchema": {
+  "configSchema": {
     "serverUrl": {
       "type": "string",
       "label": "File Server URL",
-      "description": "Endpoint address of the file server (e.g. /file-server or https://mail.example.com/file-server)",
+      "description": "Endpoint address of the corporate file server",
       "default": "/file-server"
     },
     "apiKey": {
       "type": "string",
       "label": "API Key (X-API-Key)",
-      "description": "Secret token for authorized file upload to the file server",
+      "description": "Global secret key for authorized upload to the file server",
       "default": "szma_drop_8f4a1c6e2b9d03e57a81c2d4"
-    },
+    }
+  },
+  "settingsSchema": {
     "sizeThresholdMb": {
       "type": "number",
       "label": "Auto-intercept Size Threshold (MB)",
