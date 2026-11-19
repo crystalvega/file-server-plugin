@@ -191,6 +191,7 @@ function registerActions(api) {
 }
 
 // React UI Component rendered inside PluginDialogHost modal dialog
+// Perfectly matches Bulwark's theme (Dark, Light, Custom) via --color-* tokens
 function UploadDialog(props) {
   const h = React.createElement;
   const [files, setFiles] = React.useState([]);
@@ -307,12 +308,13 @@ function UploadDialog(props) {
 
   return h('div', {
     style: {
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-      color: 'var(--foreground, #0f172a)',
-      backgroundColor: 'var(--background, #ffffff)',
-      padding: '20px 24px',
+      fontFamily: 'inherit',
+      color: 'var(--color-foreground, inherit)',
+      backgroundColor: 'transparent',
+      padding: '16px 20px',
       maxWidth: '540px',
       margin: '0 auto',
+      boxSizing: 'border-box',
     }
   }, [
     // Hidden File Input
@@ -331,7 +333,12 @@ function UploadDialog(props) {
     // Description text
     h('div', {
       key: 'desc',
-      style: { fontSize: '13px', color: 'var(--muted-foreground, #64748b)', marginBottom: '16px' }
+      style: {
+        fontSize: '13px',
+        color: 'var(--color-muted-foreground, #a1a1aa)',
+        marginBottom: '16px',
+        lineHeight: 1.5,
+      }
     }, 'Файлы будут загружены на корпоративный защищенный сервер с ограничением по времени и доступом по PIN-коду. Ссылка и код будут вставлены в письмо.'),
 
     // Dropzone
@@ -342,8 +349,12 @@ function UploadDialog(props) {
       onDragLeave: onDragLeave,
       onDrop: onDrop,
       style: {
-        border: isDragging ? '2px dashed var(--primary, #185aea)' : '2px dashed var(--border, #cbd5e1)',
-        backgroundColor: isDragging ? 'var(--accent, #f1f5f9)' : 'var(--muted, #f8fafc)',
+        border: isDragging
+          ? '2px dashed var(--color-primary, #3b82f6)'
+          : '2px dashed var(--color-border, rgba(120, 120, 120, 0.25))',
+        backgroundColor: isDragging
+          ? 'var(--color-accent, rgba(120, 120, 120, 0.15))'
+          : 'var(--color-muted, rgba(120, 120, 120, 0.08))',
         borderRadius: '8px',
         padding: '24px 16px',
         textAlign: 'center',
@@ -358,11 +369,11 @@ function UploadDialog(props) {
       }, '☁️'),
       h('div', {
         key: 'drop-title',
-        style: { fontWeight: 600, fontSize: '14px', marginBottom: '4px', color: 'var(--foreground, #0f172a)' }
+        style: { fontWeight: 600, fontSize: '14px', marginBottom: '4px', color: 'var(--color-foreground, inherit)' }
       }, 'Нажмите для выбора файлов или перетащите их сюда'),
       h('div', {
         key: 'drop-sub',
-        style: { fontSize: '12px', color: 'var(--muted-foreground, #64748b)' }
+        style: { fontSize: '12px', color: 'var(--color-muted-foreground, #a1a1aa)' }
       }, 'Любые типы файлов (до 5 ГБ на пакет)'),
     ]) : null,
 
@@ -370,7 +381,8 @@ function UploadDialog(props) {
     (files.length > 0 && !uploading) ? h('div', {
       key: 'files-box',
       style: {
-        border: '1px solid var(--border, #e2e8f0)',
+        border: '1px solid var(--color-border, rgba(120, 120, 120, 0.2))',
+        backgroundColor: 'var(--color-muted, rgba(120, 120, 120, 0.05))',
         borderRadius: '6px',
         padding: '8px 12px',
         marginBottom: '16px',
@@ -380,7 +392,7 @@ function UploadDialog(props) {
     }, [
       h('div', {
         key: 'files-head',
-        style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--muted-foreground, #64748b)' }
+        style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--color-muted-foreground, #a1a1aa)' }
       }, `Выбрано файлов: ${files.length} (${formatSize(totalBytes)})`),
       ...files.map((f, idx) => h('div', {
         key: 'file-' + idx,
@@ -389,8 +401,9 @@ function UploadDialog(props) {
           alignItems: 'center',
           justifyContent: 'space-between',
           fontSize: '13px',
-          padding: '4px 0',
-          borderBottom: idx < files.length - 1 ? '1px solid var(--border, #f1f5f9)' : 'none',
+          padding: '5px 0',
+          borderBottom: idx < files.length - 1 ? '1px solid var(--color-border, rgba(120, 120, 120, 0.15))' : 'none',
+          color: 'var(--color-foreground, inherit)',
         }
       }, [
         h('span', {
@@ -400,6 +413,7 @@ function UploadDialog(props) {
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
             maxWidth: '340px',
+            color: 'var(--color-foreground, inherit)',
           }
         }, `📎 ${f.name}`),
         h('div', {
@@ -408,7 +422,7 @@ function UploadDialog(props) {
         }, [
           h('span', {
             key: 'fs',
-            style: { fontSize: '12px', color: 'var(--muted-foreground, #64748b)' }
+            style: { fontSize: '12px', color: 'var(--color-muted-foreground, #a1a1aa)' }
           }, formatSize(f.size)),
           h('button', {
             key: 'del',
@@ -419,7 +433,7 @@ function UploadDialog(props) {
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: 'var(--destructive, #ef4444)',
+              color: 'var(--color-destructive, #ef4444)',
               fontWeight: 'bold',
               padding: '0 4px',
             }
@@ -439,19 +453,20 @@ function UploadDialog(props) {
         fontSize: '13px',
       }
     }, [
-      h('label', { key: 'lbl-ttl', style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, [
+      h('label', { key: 'lbl-ttl', style: { display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--color-foreground, inherit)' } }, [
         h('span', { key: 'ttl-t', style: { fontWeight: 500 } }, 'Срок хранения:'),
         h('select', {
           key: 'ttl-s',
           value: ttlDays,
           onChange: (e) => setTtlDays(Number(e.target.value)),
           style: {
-            padding: '6px 8px',
+            padding: '7px 10px',
             borderRadius: '6px',
-            border: '1px solid var(--border, #cbd5e1)',
-            backgroundColor: 'var(--background, #ffffff)',
-            color: 'var(--foreground, #0f172a)',
+            border: '1px solid var(--color-border, rgba(120, 120, 120, 0.3))',
+            backgroundColor: 'var(--color-card, var(--color-background, rgba(120, 120, 120, 0.1)))',
+            color: 'var(--color-foreground, inherit)',
             fontSize: '13px',
+            outline: 'none',
           }
         }, [
           h('option', { key: '28', value: 28 }, '28 дней (по умолчанию)'),
@@ -460,7 +475,7 @@ function UploadDialog(props) {
         ]),
       ]),
 
-      h('label', { key: 'lbl-pin', style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, [
+      h('label', { key: 'lbl-pin', style: { display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--color-foreground, inherit)' } }, [
         h('span', { key: 'pin-t', style: { fontWeight: 500 } }, 'PIN-код (опционально):'),
         h('input', {
           key: 'pin-i',
@@ -470,13 +485,14 @@ function UploadDialog(props) {
           value: customPin,
           onChange: (e) => setCustomPin(e.target.value.replace(/\D/g, '')),
           style: {
-            padding: '6px 8px',
+            padding: '7px 10px',
             borderRadius: '6px',
-            border: '1px solid var(--border, #cbd5e1)',
-            backgroundColor: 'var(--background, #ffffff)',
-            color: 'var(--foreground, #0f172a)',
+            border: '1px solid var(--color-border, rgba(120, 120, 120, 0.3))',
+            backgroundColor: 'var(--color-card, var(--color-background, rgba(120, 120, 120, 0.1)))',
+            color: 'var(--color-foreground, inherit)',
             fontSize: '13px',
             letterSpacing: customPin ? '2px' : 'normal',
+            outline: 'none',
           }
         }),
       ]),
@@ -492,7 +508,7 @@ function UploadDialog(props) {
         style: {
           height: '8px',
           borderRadius: '4px',
-          backgroundColor: 'var(--muted, #e2e8f0)',
+          backgroundColor: 'var(--color-muted, rgba(120, 120, 120, 0.2))',
           overflow: 'hidden',
           marginBottom: '8px',
         }
@@ -502,7 +518,7 @@ function UploadDialog(props) {
           style: {
             height: '100%',
             width: `${progress}%`,
-            backgroundColor: 'var(--primary, #185aea)',
+            backgroundColor: 'var(--color-primary, #3b82f6)',
             transition: 'width 0.2s ease',
           }
         }),
@@ -511,7 +527,7 @@ function UploadDialog(props) {
         key: 'prog-text',
         style: {
           fontSize: '13px',
-          color: 'var(--muted-foreground, #64748b)',
+          color: 'var(--color-muted-foreground, #a1a1aa)',
           textAlign: 'center',
         }
       }, progressText || 'Загрузка файлов...'),
@@ -523,8 +539,8 @@ function UploadDialog(props) {
       style: {
         padding: '8px 12px',
         borderRadius: '6px',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        color: 'var(--destructive, #ef4444)',
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        color: 'var(--color-destructive, #ef4444)',
         fontSize: '13px',
         marginBottom: '16px',
       }
@@ -540,7 +556,7 @@ function UploadDialog(props) {
         gap: '8px',
         marginTop: '16px',
         paddingTop: '12px',
-        borderTop: '1px solid var(--border, #e2e8f0)',
+        borderTop: '1px solid var(--color-border, rgba(120, 120, 120, 0.2))',
       }
     }, [
       h('button', {
@@ -551,9 +567,9 @@ function UploadDialog(props) {
         style: {
           padding: '8px 16px',
           borderRadius: '6px',
-          border: '1px solid var(--border, #cbd5e1)',
+          border: '1px solid var(--color-border, rgba(120, 120, 120, 0.3))',
           backgroundColor: 'transparent',
-          color: 'var(--foreground, #0f172a)',
+          color: 'var(--color-foreground, inherit)',
           fontSize: '13px',
           cursor: uploading ? 'not-allowed' : 'pointer',
         }
@@ -568,8 +584,8 @@ function UploadDialog(props) {
           padding: '8px 18px',
           borderRadius: '6px',
           border: 'none',
-          backgroundColor: 'var(--primary, #185aea)',
-          color: 'var(--primary-foreground, #ffffff)',
+          backgroundColor: 'var(--color-primary, #185aea)',
+          color: 'var(--color-primary-foreground, #ffffff)',
           fontSize: '13px',
           fontWeight: 600,
           cursor: files.length === 0 ? 'not-allowed' : 'pointer',
