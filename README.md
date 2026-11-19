@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.svg" width="128" height="128" alt="Bulwark Mail Drop Icon" />
+</p>
+
 # Bulwark Webmail - File Server (Mail Drop) Plugin
 
 Official client plugin for **Bulwark Webmail** that enables seamless offloading of large email attachments to a secure, temporary corporate file server with automatic link and PIN code insertion.

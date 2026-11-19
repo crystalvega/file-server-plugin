@@ -52,5 +52,6 @@
       "description": "Show confirmation dialog before automatically uploading large attachments",
       "default": true
     }
-  }
+  },
+  "icon": "icon.svg"
 }
