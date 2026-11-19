@@ -1,11 +1,14 @@
 {
   "id": "file-server-drop",
   "name": "Файловый сервер (Mail Drop)",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "SZMA Inform",
   "description": "Автоматическая и ручная выгрузка файлов на защищенный корпоративный файловый сервер с 28-дневным сроком хранения и PIN-кодом",
   "type": "hook",
   "entrypoint": "index.js",
+  "homepage": "https://git.szma-inform.ru/mail.local/file-server-plugin",
+  "repository": "https://git.szma-inform.ru/mail.local/file-server-plugin.git",
+  "license": "MIT",
   "permissions": [
     "email:blob-read",
     "email:blob-write",
@@ -14,21 +17,42 @@
     "compose:write"
   ],
   "httpOrigins": [
-    "https://mail.szma-inform.ru"
+    "https://mail.szma-inform.ru",
+    "https://*.szma-inform.ru"
   ],
   "settingsSchema": {
+    "serverUrl": {
+      "type": "string",
+      "label": "URL файлового сервера",
+      "description": "Адрес сервера временного хранения (например, /files или https://mail.szma-inform.ru/files)",
+      "default": "/files"
+    },
+    "apiKey": {
+      "type": "string",
+      "label": "Ключ API (X-API-Key)",
+      "description": "Секретный токен для авторизации выгрузки на файловый сервер",
+      "default": "szma_drop_8f4a1c6e2b9d03e57a81c2d4"
+    },
     "sizeThresholdMb": {
       "type": "number",
-      "label": "Порог размера файла (МБ)",
-      "description": "Файлы больше этого размера предлагается загрузить на файловый сервер при обычном вложении",
+      "label": "Порог авто-перехвата вложений (МБ)",
+      "description": "Файлы больше этого размера предлагается выгрузить на файловый сервер при обычном прикреплении",
       "default": 20,
       "min": 1,
       "max": 500
     },
+    "defaultTtlDays": {
+      "type": "number",
+      "label": "Срок хранения по умолчанию (дней)",
+      "description": "Количество дней хранения файлов до автоматического удаления (макс. 28)",
+      "default": 28,
+      "min": 1,
+      "max": 28
+    },
     "alwaysAsk": {
       "type": "boolean",
       "label": "Запрашивать подтверждение",
-      "description": "Показывать диалог подтверждения перед автоматической загрузкой",
+      "description": "Показывать диалог подтверждения перед автоматической загрузкой большого файла",
       "default": true
     }
   }

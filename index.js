@@ -19,6 +19,32 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+async function getPluginConfig() {
+  let serverUrl = '/files';
+  let apiKey = '';
+  let thresholdMb = 20;
+  let defaultTtlDays = 28;
+  let alwaysAsk = true;
+
+  if (pluginApi && pluginApi.settings && typeof pluginApi.settings.get === 'function') {
+    try {
+      const s = await pluginApi.settings.get();
+      if (s) {
+        if (typeof s.serverUrl === 'string' && s.serverUrl.trim()) {
+          serverUrl = s.serverUrl.trim().replace(/\/+$/, '');
+        }
+        if (typeof s.apiKey === 'string') {
+          apiKey = s.apiKey.trim();
+        }
+        if (typeof s.sizeThresholdMb === 'number') thresholdMb = s.sizeThresholdMb;
+        if (typeof s.defaultTtlDays === 'number') defaultTtlDays = s.defaultTtlDays;
+        if (typeof s.alwaysAsk === 'boolean') alwaysAsk = s.alwaysAsk;
+      }
+    } catch (e) {}
+  }
+  return { serverUrl, apiKey, thresholdMb, defaultTtlDays, alwaysAsk };
+}
+
 function buildEmailSnippet(uploadData, filesList) {
   const expiresDate = new Date(uploadData.expires_at).toLocaleDateString('ru-RU');
   const files = (filesList && filesList.length > 0)
@@ -86,26 +112,17 @@ async function handleAttachment(fileId) {
 
   if (!file) return fileId;
 
-  let thresholdMb = 20;
-  let alwaysAsk = true;
-  try {
-    const settings = await pluginApi.settings.get();
-    if (settings) {
-      if (typeof settings.sizeThresholdMb === 'number') thresholdMb = settings.sizeThresholdMb;
-      if (typeof settings.alwaysAsk === 'boolean') alwaysAsk = settings.alwaysAsk;
-    }
-  } catch (e) {}
-
-  const thresholdBytes = thresholdMb * 1024 * 1024;
+  const config = await getPluginConfig();
+  const thresholdBytes = config.thresholdMb * 1024 * 1024;
   if (file.size < thresholdBytes) {
     return fileId;
   }
 
-  if (alwaysAsk && pluginApi.ui && typeof pluginApi.ui.confirm === 'function') {
+  if (config.alwaysAsk && pluginApi.ui && typeof pluginApi.ui.confirm === 'function') {
     const formattedSize = formatSize(file.size);
     const proceed = await pluginApi.ui.confirm({
       title: 'Большой файл во вложении',
-      message: `Файл "${file.name}" (${formattedSize}) превышает порог ${thresholdMb} МБ.\n\nЗагрузить его на защищенный корпоративный файловый сервер?\n• Срок хранения: 28 дней\n• Защита: 6-значный PIN-код\n• Ссылка и код доступа будут автоматически добавлены в письмо.`,
+      message: `Файл "${file.name}" (${formattedSize}) превышает установленный порог ${config.thresholdMb} МБ.\n\nЗагрузить его на защищенный корпоративный файловый сервер?\n• Срок хранения: ${config.defaultTtlDays} дней\n• Защита: 6-значный PIN-код\n• Ссылка и код доступа будут автоматически добавлены в письмо.`,
       confirmLabel: 'Загрузить на файловый сервер',
       cancelLabel: 'Оставить как обычное вложение',
     });
@@ -121,12 +138,19 @@ async function handleAttachment(fileId) {
 
   const formData = new FormData();
   formData.append('files', file, file.name);
-  formData.append('ttl_days', '28');
+  formData.append('ttl_days', String(config.defaultTtlDays));
+
+  const headers = {};
+  if (config.apiKey) {
+    headers['X-API-Key'] = config.apiKey;
+  }
 
   let uploadData;
   try {
-    const res = await fetch('/files/api/upload', {
+    const uploadUrl = (config.serverUrl || '/files') + '/api/upload';
+    const res = await fetch(uploadUrl, {
       method: 'POST',
+      headers: headers,
       body: formData,
     });
 
@@ -167,7 +191,7 @@ function registerActions(api) {
         id: 'upload-fileserver',
         label: 'Файловый сервер',
         icon: 'cloud-upload',
-        description: 'Загрузить файлы на корпоративный файловый сервер (Mail Drop)',
+        description: 'Загрузить файлы на защищенный корпоративный файловый сервер',
         order: 10,
       },
     ]);
@@ -191,11 +215,11 @@ function registerActions(api) {
 }
 
 // React UI Component rendered inside PluginDialogHost modal dialog
-// Perfectly matches Bulwark's theme (Dark, Light, Custom) via --color-* tokens
+// Matches Bulwark's theme (Dark, Light, Custom) via --color-* tokens
 function UploadDialog(props) {
   const h = React.createElement;
   const [files, setFiles] = React.useState([]);
-  const [ttlDays, setTtlDays] = React.useState(28);
+  const [ttlDays, setTtlDays] = React.useState(props.defaultTtlDays || 28);
   const [customPin, setCustomPin] = React.useState('');
   const [uploading, setUploading] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
@@ -203,6 +227,9 @@ function UploadDialog(props) {
   const [error, setError] = React.useState(null);
   const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef(null);
+
+  const serverUrl = (props.serverUrl || '/files').replace(/\/+$/, '');
+  const apiKey = props.apiKey || '';
 
   const addFiles = (selectedList) => {
     if (!selectedList || selectedList.length === 0) return;
@@ -241,7 +268,12 @@ function UploadDialog(props) {
     }
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/files/api/upload', true);
+    const endpoint = serverUrl + '/api/upload';
+    xhr.open('POST', endpoint, true);
+
+    if (apiKey) {
+      xhr.setRequestHeader('X-API-Key', apiKey);
+    }
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && e.total > 0) {
@@ -374,7 +406,7 @@ function UploadDialog(props) {
       h('div', {
         key: 'drop-sub',
         style: { fontSize: '12px', color: 'var(--color-muted-foreground, #a1a1aa)' }
-      }, 'Любые типы файлов (до 5 ГБ на пакет)'),
+      }, 'Любые типы файлов (до 10 ГБ на пакет)'),
     ]) : null,
 
     // Selected files list
@@ -612,10 +644,16 @@ module.exports = {
       if (actionId === 'upload-fileserver' || actionId === 'upload-fileserver-menu') {
         const composerId = context?.composerId;
         try {
+          const config = await getPluginConfig();
           const result = await pluginApi.ui.openDialog({
             title: 'Загрузка файлов на файловый сервер',
             slot: 'plugin-dialog',
-            extraProps: { composerId },
+            extraProps: {
+              composerId,
+              serverUrl: config.serverUrl,
+              apiKey: config.apiKey,
+              defaultTtlDays: config.defaultTtlDays,
+            },
             width: 540,
           });
 
