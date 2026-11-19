@@ -1,0 +1,18 @@
+name: Package Bulwark Plugin
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create ZIP Package
+        run: |
+          zip -r file-server-drop.zip manifest.json index.js README.md
+          echo "Package created successfully"
