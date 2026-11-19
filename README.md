@@ -39,8 +39,8 @@ services:
     environment:
       # Внешний URL вашего почтового сервера
       - PUBLIC_BASE_URL=https://mail.example.com
-      # Префикс пути (рекомендуется /files)
-      - URL_PREFIX=/files
+      # Префикс пути (рекомендуется /file-server)
+      - URL_PREFIX=/file-server
       # Секретный API-ключ для защиты от несанкционированной загрузки
       - API_KEY=your_strong_secret_api_key_here
       # Срок хранения файлов в днях
@@ -66,8 +66,8 @@ networks:
 
 #### Nginx
 ```nginx
-location /files/ {
-    proxy_pass http://file-server:8000/files/;
+location /file-server/ {
+    proxy_pass http://file-server:8000/file-server/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -82,7 +82,7 @@ location /files/ {
 http:
   routers:
     file-server:
-      rule: "Host(`mail.example.com`) && PathPrefix(`/files`)"
+      rule: "Host(`mail.example.com`) && PathPrefix(`/file-server`)"
       entryPoints:
         - websecure
       tls: {}
@@ -98,7 +98,7 @@ http:
 #### Caddy
 ```caddyfile
 mail.example.com {
-    handle_path /files/* {
+    handle_path /file-server/* {
         reverse_proxy file-server:8000
     }
 }
@@ -156,7 +156,7 @@ mail.example.com {
 
 | Параметр | По умолчанию | Описание |
 | :--- | :--- | :--- |
-| `serverUrl` | `/files` | URL-эндпоинт файлового сервера (например `/files` или `https://files.example.com`) |
+| `serverUrl` | `/file-server` | URL-эндпоинт файлового сервера (например `/file-server` или `https://files.example.com`) |
 | `apiKey` | *(пусто)* | Секретный токен (`X-API-Key`), совпадающий со значением `API_KEY` на файловом сервере |
 | `sizeThresholdMb` | `20` | Размер вложений в МБ, при превышении которого предлагается выгрузка на файловый сервер |
 | `defaultTtlDays` | `28` | Срок хранения файлов (дней) |

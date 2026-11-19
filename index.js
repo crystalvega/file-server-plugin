@@ -20,7 +20,7 @@ function escapeHtml(str) {
 }
 
 async function getPluginConfig() {
-  let serverUrl = '/files';
+  let serverUrl = '/file-server';
   let apiKey = '';
   let thresholdMb = 20;
   let defaultTtlDays = 28;
@@ -147,7 +147,7 @@ async function handleAttachment(fileId) {
 
   let uploadData;
   try {
-    const uploadUrl = (config.serverUrl || '/files') + '/api/upload';
+    const uploadUrl = (config.serverUrl || '/file-server') + '/api/upload';
     const res = await fetch(uploadUrl, {
       method: 'POST',
       headers: headers,
@@ -228,7 +228,7 @@ function UploadDialog(props) {
   const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef(null);
 
-  const serverUrl = (props.serverUrl || '/files').replace(/\/+$/, '');
+  const serverUrl = (props.serverUrl || '/file-server').replace(/\/+$/, '');
   const apiKey = props.apiKey || '';
 
   const addFiles = (selectedList) => {

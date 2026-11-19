@@ -24,8 +24,8 @@
     "serverUrl": {
       "type": "string",
       "label": "URL файлового сервера",
-      "description": "Адрес сервера временного хранения (например, /files или https://mail.szma-inform.ru/files)",
-      "default": "/files"
+      "description": "Адрес сервера временного хранения (например, /file-server или https://mail.szma-inform.ru/file-server)",
+      "default": "/file-server"
     },
     "apiKey": {
       "type": "string",
