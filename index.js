@@ -4,8 +4,8 @@
 let pluginApi = null;
 
 function formatSize(bytes) {
-  if (!bytes || bytes <= 0) return '0 Б';
-  const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+  if (!bytes || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return (bytes / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
 }
@@ -46,7 +46,11 @@ async function getPluginConfig() {
 }
 
 function buildEmailSnippet(uploadData, filesList) {
-  const expiresDate = new Date(uploadData.expires_at).toLocaleDateString('ru-RU');
+  const expiresDate = new Date(uploadData.expires_at).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
   const files = (filesList && filesList.length > 0)
     ? filesList
     : (uploadData.files && uploadData.files.length > 0)
@@ -68,12 +72,12 @@ function buildEmailSnippet(uploadData, filesList) {
   }
 
   const headerHtml = isMultiple
-    ? `📦 Вложенные файлы (${files.length} шт., всего ${totalFormatted})`
-    : `📎 Вложенный большой файл: ${escapeHtml(files[0]?.name || 'Файл')} <span style="font-weight: normal; color: #64748b;">(${formatSize(files[0]?.size || totalBytes)})</span>`;
+    ? `📦 Attached Files (${files.length} items, total ${totalFormatted})`
+    : `📎 Large Attached File: ${escapeHtml(files[0]?.name || 'File')} <span style="font-weight: normal; color: #64748b;">(${formatSize(files[0]?.size || totalBytes)})</span>`;
 
   const headerText = isMultiple
-    ? `📦 Вложенные файлы (${files.length} шт., всего ${totalFormatted}):\n${fileRowsText}`
-    : `📎 Вложенный файл: ${files[0]?.name || 'Файл'} (${formatSize(files[0]?.size || totalBytes)})\n`;
+    ? `📦 Attached Files (${files.length} items, total ${totalFormatted}):\n${fileRowsText}`
+    : `📎 Attached File: ${files[0]?.name || 'File'} (${formatSize(files[0]?.size || totalBytes)})\n`;
 
   const html = `
 <div style="margin: 16px 0; padding: 16px 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #0f172a;">
@@ -82,232 +86,245 @@ function buildEmailSnippet(uploadData, filesList) {
   </div>
   ${fileRowsHtml}
   <div style="margin-bottom: 8px; color: #334155;">
-    ${isMultiple ? 'Файлы временно размещены' : 'Файл временно размещен'} на защищенном корпоративном сервере и доступен для скачивания до <b>${expiresDate}</b>.
+    ${isMultiple ? 'Files are temporarily hosted' : 'File is temporarily hosted'} on the secure corporate file server and available for download until <b>${expiresDate}</b>.
   </div>
   <div style="margin-bottom: 8px;">
-    👉 <b>Ссылка для скачивания:</b> <a href="${uploadData.url}" target="_blank" style="color: #185aea; text-decoration: underline; font-weight: 600;">${uploadData.url}</a>
+    👉 <b>Download link:</b> <a href="${uploadData.url}" target="_blank" style="color: #185aea; text-decoration: underline; font-weight: 600;">${uploadData.url}</a>
   </div>
   <div>
-    🔑 <b>Код доступа (PIN):</b> <span style="font-family: monospace; font-size: 15px; font-weight: 700; background-color: #e2e8f0; padding: 2px 8px; border-radius: 4px; letter-spacing: 2px; color: #0f172a;">${uploadData.pin}</span>
+    🔑 <b>Access Code (PIN):</b> <span style="font-family: monospace; font-size: 15px; font-weight: 700; background-color: #e2e8f0; padding: 2px 8px; border-radius: 4px; letter-spacing: 2px; color: #0f172a;">${uploadData.pin}</span>
   </div>
 </div>
 `;
 
-  const text = `\n------------------------------------------------------------\n${headerText}Файл доступен до: ${expiresDate}\n👉 Ссылка для скачивания: ${uploadData.url}\n🔑 Код доступа (PIN): ${uploadData.pin}\n------------------------------------------------------------\n`;
+  const text = `\n------------------------------------------------------------\n${headerText}Available until: ${expiresDate}\n👉 Download link: ${uploadData.url}\n🔑 Access code (PIN): ${uploadData.pin}\n------------------------------------------------------------\n`;
 
   return { html, text };
 }
 
-// Automatic attachment handler for files > threshold (default 20MB)
+// Automatic attachment handler for files > threshold (default 20 MB)
 async function handleAttachment(fileId) {
-  if (!pluginApi) return fileId;
+  if (!pluginApi || !pluginApi.blobs) return null;
 
-  let file;
   try {
-    file = await pluginApi.upfiles.get(fileId);
-  } catch (err) {
-    console.error('[file-server-drop] Error reading file:', err);
-    return fileId;
-  }
+    const file = await pluginApi.blobs.get(fileId);
+    if (!file || !file.size) return null;
 
-  if (!file) return fileId;
+    const config = await getPluginConfig();
+    const thresholdBytes = config.thresholdMb * 1024 * 1024;
 
-  const config = await getPluginConfig();
-  const thresholdBytes = config.thresholdMb * 1024 * 1024;
-  if (file.size < thresholdBytes) {
-    return fileId;
-  }
-
-  if (config.alwaysAsk && pluginApi.ui && typeof pluginApi.ui.confirm === 'function') {
-    const formattedSize = formatSize(file.size);
-    const proceed = await pluginApi.ui.confirm({
-      title: 'Большой файл во вложении',
-      message: `Файл "${file.name}" (${formattedSize}) превышает установленный порог ${config.thresholdMb} МБ.\n\nЗагрузить его на защищенный корпоративный файловый сервер?\n• Срок хранения: ${config.defaultTtlDays} дней\n• Защита: 6-значный PIN-код\n• Ссылка и код доступа будут автоматически добавлены в письмо.`,
-      confirmLabel: 'Загрузить на файловый сервер',
-      cancelLabel: 'Оставить как обычное вложение',
-    });
-
-    if (!proceed) {
-      return fileId;
+    if (file.size <= thresholdBytes) {
+      return null; // Attach normally
     }
-  }
 
-  if (pluginApi.toast && typeof pluginApi.toast.info === 'function') {
-    pluginApi.toast.info(`Выгрузка "${file.name}" на файловый сервер...`);
-  }
+    const formattedSize = formatSize(file.size);
 
-  const formData = new FormData();
-  formData.append('files', file, file.name);
-  formData.append('ttl_days', String(config.defaultTtlDays));
+    if (config.alwaysAsk && pluginApi.ui && typeof pluginApi.ui.confirm === 'function') {
+      const confirmed = await pluginApi.ui.confirm({
+        title: 'Large File Attachment',
+        message: `The file "${file.name}" (${formattedSize}) exceeds the standard email limit of ${config.thresholdMb} MB.\n\nWould you like to upload it to the secure corporate file server instead?\n• Retention period: ${config.defaultTtlDays} days\n• Protection: 6-digit PIN code\n• Download link and PIN will be automatically added to the message.`,
+        confirmLabel: 'Upload to File Server',
+        cancelLabel: 'Attach Normally',
+      });
+      if (!confirmed) {
+        return null; // Keep regular attachment
+      }
+    }
 
-  const headers = {};
-  if (config.apiKey) {
-    headers['X-API-Key'] = config.apiKey;
-  }
+    if (pluginApi.toast && typeof pluginApi.toast.info === 'function') {
+      pluginApi.toast.info(`Uploading "${file.name}" to file server...`);
+    }
 
-  let uploadData;
-  try {
+    const formData = new FormData();
+    const blob = await file.slice();
+    formData.append('files', blob, file.name);
+    formData.append('ttl_days', String(config.defaultTtlDays));
+
     const uploadUrl = (config.serverUrl || '/file-server') + '/api/upload';
+    const headers = {};
+    if (config.apiKey) {
+      headers['X-API-Key'] = config.apiKey;
+    }
+
     const res = await fetch(uploadUrl, {
       method: 'POST',
-      headers: headers,
+      headers,
       body: formData,
     });
 
     if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.detail || `HTTP ${res.status}`);
+      const errText = await res.text();
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg = errJson.detail || errJson.message || errMsg;
+      } catch (e) {
+        errMsg = errText || errMsg;
+      }
+      throw new Error(errMsg);
     }
 
-    uploadData = await res.json();
+    const uploadData = await res.json();
+    const { html, text } = buildEmailSnippet(uploadData, [file]);
+
+    if (pluginApi.composer && typeof pluginApi.composer.insertText === 'function') {
+      await pluginApi.composer.insertText({ html, text });
+    }
+
+    if (pluginApi.toast && typeof pluginApi.toast.success === 'function') {
+      pluginApi.toast.success(`File "${file.name}" successfully uploaded to file server!`);
+    }
+
+    return { cancelUpload: true };
   } catch (err) {
-    console.error('[file-server-drop] Upload failed:', err);
+    console.error('[file-server-drop] Intercept upload error:', err);
     if (pluginApi.toast && typeof pluginApi.toast.error === 'function') {
-      pluginApi.toast.error(`Ошибка отправки на файловый сервер: ${err.message}`);
+      pluginApi.toast.error(`Failed to upload to file server: ${err.message}`);
     }
-    return fileId;
+    return null;
   }
-
-  if (pluginApi.toast && typeof pluginApi.toast.success === 'function') {
-    pluginApi.toast.success(`Файл "${file.name}" успешно загружен на файловый сервер!`);
-  }
-
-  const snippet = buildEmailSnippet(uploadData, [{ name: file.name, size: file.size }]);
-
-  return {
-    externalAttachment: true,
-    fileId: fileId,
-    html: snippet.html,
-    text: snippet.text,
-  };
 }
 
 function registerActions(api) {
-  if (!api || !api.ui || typeof api.ui.setActions !== 'function') return;
+  const surfaces = [
+    'composer:toolbar',
+    'composer:action-bar',
+    'composer:primary-actions',
+    'composer:secondary-actions',
+    'composer:bottom-actions',
+    'composer:more-menu',
+    'composer:attachment-menu',
+  ];
 
-  try {
-    api.ui.setActions('composer-toolbar-actions', [
-      {
+  surfaces.forEach(surface => {
+    try {
+      api.actions.register({
         id: 'upload-fileserver',
-        label: 'Файловый сервер',
-        icon: 'cloud-upload',
-        description: 'Загрузить файлы на защищенный корпоративный файловый сервер',
+        surface,
+        label: 'File Server',
+        description: 'Upload large files to secure corporate file server (Mail Drop)',
+        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>',
         order: 10,
-      },
-    ]);
-  } catch (e) {
-    console.error('[file-server-drop] Error setting composer-toolbar-actions:', e);
-  }
+      });
+    } catch (e) {}
+  });
 
   try {
-    api.ui.setActions('composer-attach-menu', [
-      {
-        id: 'upload-fileserver-menu',
-        label: 'Загрузить на файловый сервер (Mail Drop)',
-        icon: 'cloud-upload',
-        description: 'Временное хранилище с защитой PIN-кодом',
-        order: 5,
-      },
-    ]);
-  } catch (e) {
-    console.error('[file-server-drop] Error setting composer-attach-menu:', e);
-  }
+    api.actions.register({
+      id: 'upload-fileserver-menu',
+      surface: 'composer:attachment-menu',
+      label: 'Upload to File Server (Mail Drop)',
+      description: 'Temporary file storage protected with PIN code',
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="m16 8-4-4-4 4"/><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/></svg>',
+      order: 1,
+    });
+  } catch (e) {}
 }
 
-// React UI Component rendered inside PluginDialogHost modal dialog
-// Matches Bulwark's theme (Dark, Light, Custom) via --color-* tokens
+// React modal component for uploading files
 function UploadDialog(props) {
-  const h = React.createElement;
-  const [files, setFiles] = React.useState([]);
-  const [ttlDays, setTtlDays] = React.useState(props.defaultTtlDays || 28);
-  const [customPin, setCustomPin] = React.useState('');
-  const [uploading, setUploading] = React.useState(false);
-  const [progress, setProgress] = React.useState(0);
-  const [progressText, setProgressText] = React.useState('');
-  const [error, setError] = React.useState(null);
-  const [isDragging, setIsDragging] = React.useState(false);
-  const fileInputRef = React.useRef(null);
+  const React = (typeof window !== 'undefined' && window.React) ? window.React : null;
+  if (!React) {
+    return null;
+  }
 
+  const { useState, useRef, createElement: h } = React;
+
+  const [files, setFiles] = useState([]);
+  const [ttlDays, setTtlDays] = useState(props.defaultTtlDays || 28);
+  const [pin, setPin] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressText, setProgressText] = useState('');
+  const [error, setError] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const fileInputRef = useRef(null);
   const serverUrl = (props.serverUrl || '/file-server').replace(/\/+$/, '');
   const apiKey = props.apiKey || '';
 
-  const addFiles = (selectedList) => {
-    if (!selectedList || selectedList.length === 0) return;
-    const newArr = Array.from(selectedList);
-    setFiles((prev) => {
-      const existingNames = new Set(prev.map(f => f.name));
-      const filtered = newArr.filter(f => !existingNames.has(f.name));
-      return [...prev, ...filtered];
-    });
-    setError(null);
+  const handleFileChange = (e) => {
+    if (e.target && e.target.files) {
+      const selected = Array.from(e.target.files);
+      setFiles(prev => [...prev, ...selected]);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer && e.dataTransfer.files) {
+      const dropped = Array.from(e.dataTransfer.files);
+      setFiles(prev => [...prev, ...dropped]);
+    }
   };
 
   const removeFile = (idx) => {
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setFiles(prev => prev.filter((_, i) => i !== idx));
   };
-
-  const totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
 
   const handleStartUpload = () => {
     if (files.length === 0) {
-      setError('Пожалуйста, выберите хотя бы один файл.');
+      setError('Please select at least one file.');
       return;
     }
+
+    setError(null);
     setUploading(true);
     setProgress(0);
-    setProgressText('Подготовка к загрузке...');
-    setError(null);
+    setProgressText('Preparing upload...');
 
     const formData = new FormData();
-    for (const f of files) {
-      formData.append('files', f, f.name);
-    }
+    files.forEach(f => formData.append('files', f, f.name));
     formData.append('ttl_days', String(ttlDays));
-    if (customPin && customPin.trim().length === 6) {
-      formData.append('pin', customPin.trim());
+    if (pin && pin.trim().length === 6) {
+      formData.append('pin', pin.trim());
     }
 
     const xhr = new XMLHttpRequest();
-    const endpoint = serverUrl + '/api/upload';
-    xhr.open('POST', endpoint, true);
+    xhr.open('POST', `${serverUrl}/api/upload`);
 
     if (apiKey) {
       xhr.setRequestHeader('X-API-Key', apiKey);
     }
 
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && e.total > 0) {
-        const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
         setProgress(pct);
-        setProgressText(`Загружено ${formatSize(e.loaded)} из ${formatSize(e.total)} (${pct}%)`);
+        setProgressText(`Uploaded ${formatSize(e.loaded)} of ${formatSize(e.total)} (${pct}%)`);
       }
     };
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const uploadData = JSON.parse(xhr.responseText);
-          const simpleFiles = files.map(f => ({ name: f.name, size: f.size }));
-          if (typeof props.onResult === 'function') {
-            props.onResult({ uploadData, files: simpleFiles });
+          const resp = JSON.parse(xhr.responseText);
+          if (props.onClose) {
+            props.onClose({
+              uploadData: resp,
+              files: files.map(f => ({ name: f.name, size: f.size })),
+            });
           }
         } catch (e) {
-          setError('Ошибка разбора ответа сервера: ' + e.message);
+          setError('Failed to parse server response: ' + e.message);
           setUploading(false);
         }
       } else {
-        let msg = 'HTTP ' + xhr.status;
+        let msg = `HTTP ${xhr.status}`;
         try {
-          const j = JSON.parse(xhr.responseText);
-          if (j.detail) msg = j.detail;
-        } catch (e) {}
-        setError('Ошибка загрузки: ' + msg);
+          const json = JSON.parse(xhr.responseText);
+          msg = json.detail || json.message || msg;
+        } catch (e) {
+          msg = xhr.responseText || msg;
+        }
+        setError('Upload error: ' + msg);
         setUploading(false);
       }
     };
 
     xhr.onerror = () => {
-      setError('Сетевая ошибка при передаче файлов на сервер.');
+      setError('Network error while transferring files to server.');
       setUploading(false);
     };
 
@@ -315,163 +332,169 @@ function UploadDialog(props) {
   };
 
   const handleCancel = () => {
-    if (typeof props.onCancel === 'function') {
-      props.onCancel();
-    } else if (typeof props.onResult === 'function') {
-      props.onResult(null);
+    if (props.onClose) {
+      props.onClose(null);
     }
   };
 
-  // Drag and drop handlers
-  const onDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  const onDragLeave = () => {
-    setIsDragging(false);
-  };
-  const onDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer && e.dataTransfer.files) {
-      addFiles(e.dataTransfer.files);
-    }
-  };
+  const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
 
   return h('div', {
     style: {
+      padding: '4px 0 0 0',
       fontFamily: 'inherit',
+      fontSize: '14px',
       color: 'var(--color-foreground, inherit)',
-      backgroundColor: 'transparent',
-      padding: '16px 20px',
-      maxWidth: '540px',
-      margin: '0 auto',
-      boxSizing: 'border-box',
+      background: 'transparent',
     }
   }, [
-    // Hidden File Input
-    h('input', {
-      key: 'hidden-input',
-      ref: fileInputRef,
-      type: 'file',
-      multiple: true,
-      style: { display: 'none' },
-      onChange: (e) => {
-        addFiles(e.target.files);
-        e.target.value = '';
-      }
-    }),
-
-    // Description text
-    h('div', {
+    // Subtitle
+    h('p', {
       key: 'desc',
       style: {
+        margin: '0 0 16px 0',
         fontSize: '13px',
         color: 'var(--color-muted-foreground, #a1a1aa)',
-        marginBottom: '16px',
-        lineHeight: 1.5,
+        lineHeight: '1.4',
       }
-    }, 'Файлы будут загружены на корпоративный защищенный сервер с ограничением по времени и доступом по PIN-коду. Ссылка и код будут вставлены в письмо.'),
+    }, 'Files will be uploaded to the corporate secure server with temporary retention and PIN access. The link and code will be inserted into the email.'),
 
     // Dropzone
     !uploading ? h('div', {
       key: 'dropzone',
       onClick: () => fileInputRef.current && fileInputRef.current.click(),
-      onDragOver: onDragOver,
-      onDragLeave: onDragLeave,
-      onDrop: onDrop,
+      onDragOver: (e) => { e.preventDefault(); setDragOver(true); },
+      onDragLeave: () => setDragOver(false),
+      onDrop: handleDrop,
       style: {
-        border: isDragging
-          ? '2px dashed var(--color-primary, #3b82f6)'
-          : '2px dashed var(--color-border, rgba(120, 120, 120, 0.25))',
-        backgroundColor: isDragging
-          ? 'var(--color-accent, rgba(120, 120, 120, 0.15))'
-          : 'var(--color-muted, rgba(120, 120, 120, 0.08))',
+        border: `2px dashed ${dragOver ? 'var(--color-primary, #3b82f6)' : 'var(--color-border, rgba(120, 120, 120, 0.3))'}`,
         borderRadius: '8px',
-        padding: '24px 16px',
+        padding: '28px 16px',
         textAlign: 'center',
         cursor: 'pointer',
+        backgroundColor: dragOver ? 'var(--color-accent, rgba(59, 130, 246, 0.1))' : 'var(--color-card, rgba(120, 120, 120, 0.05))',
         transition: 'all 0.15s ease',
         marginBottom: '16px',
       }
     }, [
+      h('input', {
+        key: 'input',
+        type: 'file',
+        multiple: true,
+        ref: fileInputRef,
+        onChange: handleFileChange,
+        style: { display: 'none' },
+      }),
       h('div', {
-        key: 'cloud-icon',
-        style: { fontSize: '32px', marginBottom: '8px' }
-      }, '☁️'),
+        key: 'icon-cloud',
+        style: {
+          width: '40px',
+          height: '40px',
+          margin: '0 auto 10px auto',
+          color: 'var(--color-muted-foreground, #a1a1aa)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }
+      }, [
+        h('svg', {
+          key: 'svg',
+          width: 36,
+          height: 36,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.75,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round'
+        }, [
+          h('path', { key: 'p1', d: 'M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242' }),
+          h('path', { key: 'p2', d: 'M12 12v9' }),
+          h('path', { key: 'p3', d: 'm16 16-4-4-4 4' }),
+        ])
+      ]),
       h('div', {
         key: 'drop-title',
         style: { fontWeight: 600, fontSize: '14px', marginBottom: '4px', color: 'var(--color-foreground, inherit)' }
-      }, 'Нажмите для выбора файлов или перетащите их сюда'),
+      }, 'Click to select files or drag & drop here'),
       h('div', {
         key: 'drop-sub',
         style: { fontSize: '12px', color: 'var(--color-muted-foreground, #a1a1aa)' }
-      }, 'Любые типы файлов (до 10 ГБ на пакет)'),
+      }, 'Any file types (up to 10 GB per bundle)'),
     ]) : null,
 
-    // Selected files list
+    // File list preview
     (files.length > 0 && !uploading) ? h('div', {
-      key: 'files-box',
+      key: 'file-list-wrap',
       style: {
-        border: '1px solid var(--color-border, rgba(120, 120, 120, 0.2))',
-        backgroundColor: 'var(--color-muted, rgba(120, 120, 120, 0.05))',
-        borderRadius: '6px',
-        padding: '8px 12px',
         marginBottom: '16px',
-        maxHeight: '140px',
+        maxHeight: '160px',
         overflowY: 'auto',
+        border: '1px solid var(--color-border, rgba(120, 120, 120, 0.2))',
+        borderRadius: '6px',
+        backgroundColor: 'var(--color-card, rgba(120, 120, 120, 0.05))',
       }
     }, [
       h('div', {
-        key: 'files-head',
-        style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--color-muted-foreground, #a1a1aa)' }
-      }, `Выбрано файлов: ${files.length} (${formatSize(totalBytes)})`),
-      ...files.map((f, idx) => h('div', {
-        key: 'file-' + idx,
+        key: 'list-header',
+        style: {
+          padding: '8px 12px',
+          fontSize: '12px',
+          fontWeight: 600,
+          borderBottom: '1px solid var(--color-border, rgba(120, 120, 120, 0.2))',
+          color: 'var(--color-muted-foreground, #a1a1aa)',
+          display: 'flex',
+          justifyContent: 'space-between',
+        }
+      }, [
+        h('span', { key: 't1' }, `Selected files: ${files.length} (${formatSize(totalBytes)})`),
+      ]),
+      ...files.map((f, i) => h('div', {
+        key: 'file-' + i,
         style: {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          padding: '8px 12px',
+          borderBottom: i < files.length - 1 ? '1px solid var(--color-border, rgba(120, 120, 120, 0.15))' : 'none',
           fontSize: '13px',
-          padding: '5px 0',
-          borderBottom: idx < files.length - 1 ? '1px solid var(--color-border, rgba(120, 120, 120, 0.15))' : 'none',
-          color: 'var(--color-foreground, inherit)',
         }
       }, [
-        h('span', {
-          key: 'fn',
-          style: {
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: '340px',
-            color: 'var(--color-foreground, inherit)',
-          }
-        }, `📎 ${f.name}`),
         h('div', {
-          key: 'actions',
-          style: { display: 'flex', alignItems: 'center', gap: '8px' }
+          key: 'info',
+          style: { minWidth: 0, flex: 1, marginRight: '10px' }
         }, [
-          h('span', {
-            key: 'fs',
-            style: { fontSize: '12px', color: 'var(--color-muted-foreground, #a1a1aa)' }
-          }, formatSize(f.size)),
-          h('button', {
-            key: 'del',
-            type: 'button',
-            onClick: (e) => { e.stopPropagation(); removeFile(idx); },
-            title: 'Удалить из списка',
+          h('div', {
+            key: 'fn',
             style: {
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--color-destructive, #ef4444)',
-              fontWeight: 'bold',
-              padding: '0 4px',
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              color: 'var(--color-foreground, inherit)',
             }
-          }, '✕'),
+          }, f.name),
+          h('div', {
+            key: 'fs',
+            style: { fontSize: '11px', color: 'var(--color-muted-foreground, #a1a1aa)' }
+          }, formatSize(f.size)),
         ]),
-      ])),
+        h('button', {
+          key: 'del',
+          type: 'button',
+          onClick: () => removeFile(i),
+          title: 'Remove from list',
+          style: {
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--color-destructive, #ef4444)',
+            cursor: 'pointer',
+            padding: '4px',
+            fontSize: '16px',
+            lineHeight: 1,
+          }
+        }, '✕'),
+      ]))
     ]) : null,
 
     // Settings (TTL & PIN)
@@ -485,48 +508,67 @@ function UploadDialog(props) {
         fontSize: '13px',
       }
     }, [
-      h('label', { key: 'lbl-ttl', style: { display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--color-foreground, inherit)' } }, [
-        h('span', { key: 'ttl-t', style: { fontWeight: 500 } }, 'Срок хранения:'),
+      // TTL Select
+      h('div', { key: 'ttl-col' }, [
+        h('label', {
+          key: 'ttl-lbl',
+          style: { display: 'block', marginBottom: '6px', color: 'var(--color-foreground, inherit)' }
+        }, [
+          h('span', { key: 'ttl-t', style: { fontWeight: 500 } }, 'Retention period:'),
+        ]),
         h('select', {
-          key: 'ttl-s',
+          key: 'ttl-sel',
           value: ttlDays,
-          onChange: (e) => setTtlDays(Number(e.target.value)),
+          onChange: (e) => setTtlDays(parseInt(e.target.value, 10)),
           style: {
-            padding: '7px 10px',
+            width: '100%',
+            padding: '8px 10px',
             borderRadius: '6px',
-            border: '1px solid var(--color-border, rgba(120, 120, 120, 0.3))',
-            backgroundColor: 'var(--color-card, var(--color-background, rgba(120, 120, 120, 0.1)))',
+            border: '1px solid var(--color-input, var(--color-border, rgba(120, 120, 120, 0.3)))',
+            backgroundColor: 'var(--color-input, rgba(120, 120, 120, 0.1))',
             color: 'var(--color-foreground, inherit)',
             fontSize: '13px',
             outline: 'none',
           }
         }, [
-          h('option', { key: '28', value: 28 }, '28 дней (по умолчанию)'),
-          h('option', { key: '14', value: 14 }, '14 дней'),
-          h('option', { key: '7', value: 7 }, '7 дней'),
-        ]),
+          h('option', { key: '28', value: 28 }, '28 days (default)'),
+          h('option', { key: '14', value: 14 }, '14 days'),
+          h('option', { key: '7', value: 7 }, '7 days'),
+          h('option', { key: '3', value: 3 }, '3 days'),
+          h('option', { key: '1', value: 1 }, '1 day'),
+        ])
       ]),
 
-      h('label', { key: 'lbl-pin', style: { display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--color-foreground, inherit)' } }, [
-        h('span', { key: 'pin-t', style: { fontWeight: 500 } }, 'PIN-код (опционально):'),
+      // Custom PIN (Optional)
+      h('div', { key: 'pin-col' }, [
+        h('label', {
+          key: 'pin-lbl',
+          style: { display: 'block', marginBottom: '6px', color: 'var(--color-foreground, inherit)' }
+        }, [
+          h('span', { key: 'pin-t', style: { fontWeight: 500 } }, 'PIN code (optional):'),
+        ]),
         h('input', {
-          key: 'pin-i',
+          key: 'pin-inp',
           type: 'text',
           maxLength: 6,
-          placeholder: 'Автогенерация',
-          value: customPin,
-          onChange: (e) => setCustomPin(e.target.value.replace(/\D/g, '')),
+          pattern: '[0-9]{6}',
+          placeholder: 'Auto-generated',
+          value: pin,
+          onChange: (e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 6)),
           style: {
-            padding: '7px 10px',
+            width: '100%',
+            padding: '8px 10px',
             borderRadius: '6px',
-            border: '1px solid var(--color-border, rgba(120, 120, 120, 0.3))',
-            backgroundColor: 'var(--color-card, var(--color-background, rgba(120, 120, 120, 0.1)))',
+            border: '1px solid var(--color-input, var(--color-border, rgba(120, 120, 120, 0.3)))',
+            backgroundColor: 'var(--color-input, rgba(120, 120, 120, 0.1))',
             color: 'var(--color-foreground, inherit)',
             fontSize: '13px',
-            letterSpacing: customPin ? '2px' : 'normal',
+            fontFamily: 'monospace',
             outline: 'none',
+            letterSpacing: '1px',
+            boxSizing: 'border-box',
           }
-        }),
+        })
       ]),
     ]) : null,
 
@@ -562,7 +604,7 @@ function UploadDialog(props) {
           color: 'var(--color-muted-foreground, #a1a1aa)',
           textAlign: 'center',
         }
-      }, progressText || 'Загрузка файлов...'),
+      }, progressText || 'Uploading files...'),
     ]) : null,
 
     // Error Alert
@@ -605,7 +647,7 @@ function UploadDialog(props) {
           fontSize: '13px',
           cursor: uploading ? 'not-allowed' : 'pointer',
         }
-      }, 'Отмена'),
+      }, 'Cancel'),
 
       !uploading ? h('button', {
         key: 'btn-upload',
@@ -623,7 +665,7 @@ function UploadDialog(props) {
           cursor: files.length === 0 ? 'not-allowed' : 'pointer',
           opacity: files.length === 0 ? 0.6 : 1,
         }
-      }, files.length > 0 ? `Загрузить ${files.length} файл(ов)` : 'Выберите файлы') : null,
+      }, files.length > 0 ? `Upload ${files.length} file(s)` : 'Select files') : null,
     ]),
   ]);
 }
@@ -646,7 +688,7 @@ module.exports = {
         try {
           const config = await getPluginConfig();
           const result = await pluginApi.ui.openDialog({
-            title: 'Загрузка файлов на файловый сервер',
+            title: 'Upload Files to File Server',
             slot: 'plugin-dialog',
             extraProps: {
               composerId,
@@ -663,13 +705,13 @@ module.exports = {
               await pluginApi.composer.replaceSelection(composerId, { html, text }, { below: true });
             }
             if (pluginApi.toast && typeof pluginApi.toast.success === 'function') {
-              pluginApi.toast.success('Файлы успешно загружены на файловый сервер и ссылка добавлена в письмо!');
+              pluginApi.toast.success('Files successfully uploaded to file server and link added to message!');
             }
           }
         } catch (err) {
           console.error('[file-server-drop] openDialog error:', err);
           if (pluginApi.toast && typeof pluginApi.toast.error === 'function') {
-            pluginApi.toast.error('Ошибка загрузки: ' + err.message);
+            pluginApi.toast.error('Upload failed: ' + err.message);
           }
         }
       }

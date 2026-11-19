@@ -1,14 +1,11 @@
 {
   "id": "file-server-drop",
-  "name": "Файловый сервер (Mail Drop)",
+  "name": "File Server (Mail Drop)",
   "version": "1.2.0",
   "author": "SZMA Inform",
-  "description": "Автоматическая и ручная выгрузка файлов на защищенный корпоративный файловый сервер с 28-дневным сроком хранения и PIN-кодом",
+  "description": "Secure temporary file attachments for Bulwark Webmail with 28-day retention and PIN-code protection",
   "type": "hook",
   "entrypoint": "index.js",
-  "homepage": "https://git.szma-inform.ru/mail.local/file-server-plugin",
-  "repository": "https://git.szma-inform.ru/mail.local/file-server-plugin.git",
-  "license": "MIT",
   "permissions": [
     "email:blob-read",
     "email:blob-write",
@@ -17,42 +14,42 @@
     "compose:write"
   ],
   "httpOrigins": [
-    "https://mail.szma-inform.ru",
-    "https://*.szma-inform.ru"
+    "https://*",
+    "http://localhost:*"
   ],
   "settingsSchema": {
     "serverUrl": {
       "type": "string",
-      "label": "URL файлового сервера",
-      "description": "Адрес сервера временного хранения (например, /file-server или https://mail.szma-inform.ru/file-server)",
+      "label": "File Server URL",
+      "description": "Endpoint address of the file server (e.g. /file-server or https://mail.example.com/file-server)",
       "default": "/file-server"
     },
     "apiKey": {
       "type": "string",
-      "label": "Ключ API (X-API-Key)",
-      "description": "Секретный токен для авторизации выгрузки на файловый сервер",
+      "label": "API Key (X-API-Key)",
+      "description": "Secret token for authorized file upload to the file server",
       "default": "szma_drop_8f4a1c6e2b9d03e57a81c2d4"
     },
     "sizeThresholdMb": {
       "type": "number",
-      "label": "Порог авто-перехвата вложений (МБ)",
-      "description": "Файлы больше этого размера предлагается выгрузить на файловый сервер при обычном прикреплении",
+      "label": "Auto-intercept Size Threshold (MB)",
+      "description": "Attachments larger than this size will trigger a prompt to upload to the file server",
       "default": 20,
       "min": 1,
       "max": 500
     },
     "defaultTtlDays": {
       "type": "number",
-      "label": "Срок хранения по умолчанию (дней)",
-      "description": "Количество дней хранения файлов до автоматического удаления (макс. 28)",
+      "label": "Default Retention Period (days)",
+      "description": "File storage duration before automatic deletion (max 28)",
       "default": 28,
       "min": 1,
       "max": 28
     },
     "alwaysAsk": {
       "type": "boolean",
-      "label": "Запрашивать подтверждение",
-      "description": "Показывать диалог подтверждения перед автоматической загрузкой большого файла",
+      "label": "Always Ask Confirmation",
+      "description": "Show confirmation dialog before automatically uploading large attachments",
       "default": true
     }
   }
