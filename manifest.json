@@ -1,0 +1,33 @@
+{
+  "id": "file-server-drop",
+  "name": "Файловый сервер (Mail Drop)",
+  "version": "1.0.0",
+  "author": "SZMA Inform",
+  "description": "Автоматическая выгрузка больших вложений на корпоративный защищенный файловый сервер с 28-дневным сроком хранения и PIN-кодом",
+  "type": "hook",
+  "entrypoint": "index.js",
+  "permissions": [
+    "email:blob-read",
+    "email:blob-write",
+    "ui:composer-toolbar"
+  ],
+  "httpOrigins": [
+    "https://mail.szma-inform.ru"
+  ],
+  "settingsSchema": {
+    "sizeThresholdMb": {
+      "type": "number",
+      "label": "Порог размера файла (МБ)",
+      "description": "Файлы больше этого размера предлагается загрузить на файловый сервер",
+      "default": 20,
+      "min": 1,
+      "max": 500
+    },
+    "alwaysAsk": {
+      "type": "boolean",
+      "label": "Запрашивать подтверждение",
+      "description": "Показывать диалог подтверждения перед загрузкой на файловый сервер",
+      "default": true
+    }
+  }
+}
