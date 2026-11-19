@@ -30,9 +30,12 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+const DEFAULT_API_KEY = 'szma_drop_8f4a1c6e2b9d03e57a81c2d4';
+const DEFAULT_SERVER_URL = '/file-server';
+
 async function getPluginConfig() {
-  let serverUrl = '/file-server';
-  let apiKey = '';
+  let serverUrl = DEFAULT_SERVER_URL;
+  let apiKey = DEFAULT_API_KEY;
   let thresholdMb = 20;
   let defaultTtlDays = 28;
   let alwaysAsk = true;
@@ -44,7 +47,7 @@ async function getPluginConfig() {
         if (typeof s.serverUrl === 'string' && s.serverUrl.trim()) {
           serverUrl = s.serverUrl.trim().replace(/\/+$/, '');
         }
-        if (typeof s.apiKey === 'string') {
+        if (typeof s.apiKey === 'string' && s.apiKey.trim()) {
           apiKey = s.apiKey.trim();
         }
         if (typeof s.sizeThresholdMb === 'number') thresholdMb = s.sizeThresholdMb;
@@ -287,8 +290,8 @@ function UploadDialog(props) {
   const [dragOver, setDragOver] = useState(false);
 
   const fileInputRef = useRef(null);
-  const serverUrl = (props.serverUrl || '/file-server').replace(/\/+$/, '');
-  const apiKey = props.apiKey || '';
+  const serverUrl = (props.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+  const apiKey = props.apiKey || DEFAULT_API_KEY;
 
   const closeWithResult = (res) => {
     if (typeof props.onResult === 'function') {
